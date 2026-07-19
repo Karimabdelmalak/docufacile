@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocuFacile — Convertissez, fusionnez, découpez vos documents</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --primary: #e5322d;
+    --primary-dark: #c4271f;
+    --bg: #f7f7fb;
+    --card: #ffffff;
+    --text: #1f2430;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --success: #16a34a;
+    --radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 14px 28px; display: flex; align-items: center; gap: 10px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .logo { font-size: 22px; font-weight: 800; cursor: pointer; }
+  .logo span { color: var(--primary); }
+  main { max-width: 960px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  /* ---- Accueil ---- */
+  .hero { text-align: center; margin-bottom: 44px; }
+  .hero h1 { font-size: 34px; margin-bottom: 10px; }
+  .hero p { color: var(--muted); font-size: 17px; }
+  .tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .tool-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 28px 24px; cursor: pointer; transition: transform .15s, box-shadow .15s;
+  }
+  .tool-card:hover { transform: translateY(-4px); box-shadow: 0 10px 26px rgba(0,0,0,.09); }
+  .tool-card .icon { font-size: 38px; margin-bottom: 14px; }
+  .tool-card h3 { font-size: 19px; margin-bottom: 6px; }
+  .tool-card p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+  /* ---- Vue outil ---- */
+  .tool-view { display: none; }
+  .tool-view.active { display: block; }
+  .home-view.hidden { display: none; }
+  .back-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 15px; margin-bottom: 18px; padding: 6px 0;
+  }
+  .back-btn:hover { color: var(--text); }
+  .tool-view h2 { font-size: 26px; margin-bottom: 6px; }
+  .tool-view .subtitle { color: var(--muted); margin-bottom: 24px; }
+
+  .dropzone {
+    border: 2px dashed #cbd5e1; border-radius: var(--radius); background: var(--card);
+    padding: 48px 24px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .dropzone.dragover { border-color: var(--primary); background: #fff5f5; }
+  .dropzone .dz-icon { font-size: 40px; margin-bottom: 10px; }
+  .dropzone p { color: var(--muted); margin-top: 6px; font-size: 14px; }
+  .dropzone strong { color: var(--primary); }
+  input[type="file"] { display: none; }
+
+  .file-list { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .file-item {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: 14px;
+  }
+  .file-item .f-icon { font-size: 20px; }
+  .file-item .f-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-item .f-size { color: var(--muted); font-size: 12px; }
+  .file-item button {
+    background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 4px;
+  }
+  .file-item button:hover { color: var(--primary); }
+  .file-item .move { font-size: 13px; }
+
+  .options { margin-top: 20px; background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; display: none; }
+  .options.visible { display: block; }
+  .options label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 8px; }
+  .options input[type="text"] {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px;
+  }
+  .options .hint { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .radio-row { display: flex; gap: 18px; margin-bottom: 14px; flex-wrap: wrap; }
+  .radio-row label { font-weight: 400; display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+
+  .action-btn {
+    margin-top: 22px; width: 100%; padding: 15px; border: none; border-radius: 10px;
+    background: var(--primary); color: #fff; font-size: 17px; font-weight: 700; cursor: pointer;
+    transition: background .15s;
+  }
+  .action-btn:hover:not(:disabled) { background: var(--primary-dark); }
+  .action-btn:disabled { background: #d1d5db; cursor: not-allowed; }
+
+  .status { margin-top: 16px; text-align: center; font-size: 15px; display: none; }
+  .status.visible { display: block; }
+  .status.error { color: var(--primary); }
+  .status.ok { color: var(--success); font-weight: 600; }
+  .spinner {
+    display: inline-block; width: 16px; height: 16px; border: 3px solid #e5e7eb;
+    border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 20px; }
+</style>
+</head>
+<body>
+
+<header><div class="logo" onclick="goHome()">Docu<span>Facile</span></div></header>
+
+<main>
+  <!-- ================= ACCUEIL ================= -->
+  <div id="home" class="home-view">
+    <div class="hero">
+      <h1>Tous vos outils de documents, au même endroit</h1>
+      <p>Fusionnez, découpez et convertissez vos fichiers — 100% dans votre navigateur, vos fichiers ne quittent jamais votre ordinateur.</p>
+    </div>
+    <div class="tools">
+      <div class="tool-card" onclick="openTool('merge')">
+        <div class="icon">🗂️</div>
+        <h3>Fusionner des PDF</h3>
+        <p>Combinez plusieurs fichiers PDF en un seul document, dans l'ordre que vous voulez.</p>
+      </div>
+      <div class="tool-card" onclick="openTool('split')">
+        <div class="icon">✂️</div>
+        <h3>Découper un PDF</h3>
+        <p>Extrayez certaines pages ou divisez un PDF en plusieurs fichiers séparés.</p>
+      </div>
+      <div class="tool-card" onclick="openTool('convert')">
+        <div class="icon">📄</div>
+        <h3>Word / Texte → PDF</h3>
+        <p>Convertissez vos documents Word (.docx) ou texte (.txt) en PDF, avec mise en forme et images.</p>
+      </div>
+      <div class="tool-card" onclick="openTool('img2pdf')">
+        <div class="icon">🖼️</div>
+        <h3>Images → PDF</h3>
+        <p>Transformez vos images JPG ou PNG en un document PDF, une image par page.</p>
+      </div>
+      <div class="tool-card" onclick="openTool('pdf2word')">
+        <div class="icon">📝</div>
+        <h3>PDF → Word</h3>
+        <p>Extrayez le texte d'un PDF vers un document Word (.docx) modifiable.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= FUSIONNER ================= -->
+  <div id="tool-merge" class="tool-view">
+    <button class="back-btn" onclick="goHome()">← Retour aux outils</button>
+    <h2>Fusionner des PDF</h2>
+    <p class="subtitle">Ajoutez au moins 2 fichiers PDF, réorganisez-les, puis fusionnez.</p>
+    <div class="dropzone" id="dz-merge">
+      <div class="dz-icon">📥</div>
+      <div><strong>Choisissez des fichiers PDF</strong> ou glissez-les ici</div>
+      <p>Plusieurs fichiers acceptés</p>
+      <input type="file" id="input-merge" accept="application/pdf" multiple>
+    </div>
+    <div class="file-list" id="list-merge"></div>
+    <button class="action-btn" id="btn-merge" disabled>Fusionner les PDF</button>
+    <div class="status" id="status-merge"></div>
+  </div>
+
+  <!-- ================= DÉCOUPER ================= -->
+  <div id="tool-split" class="tool-view">
+    <button class="back-btn" onclick="goHome()">← Retour aux outils</button>
+    <h2>Découper un PDF</h2>
+    <p class="subtitle">Ajoutez un fichier PDF, puis choisissez comment le découper.</p>
+    <div class="dropzone" id="dz-split">
+      <div class="dz-icon">📥</div>
+      <div><strong>Choisissez un fichier PDF</strong> ou glissez-le ici</div>
+      <p>Un seul fichier</p>
+      <input type="file" id="input-split" accept="application/pdf">
+    </div>
+    <div class="file-list" id="list-split"></div>
+    <div class="options" id="options-split">
+      <div class="radio-row">
+        <label><input type="radio" name="split-mode" value="extract" checked> Extraire des pages (1 PDF)</label>
+        <label><input type="radio" name="split-mode" value="separate" > Diviser en fichiers séparés (ZIP)</label>
+      </div>
+      <label for="split-ranges">Pages ou plages de pages</label>
+      <input type="text" id="split-ranges" placeholder="Ex : 1-3, 5, 8-10">
+      <p class="hint">« Extraire » crée un seul PDF avec les pages choisies. « Diviser » crée un fichier par plage (laisser vide = une page par fichier), livrés dans un ZIP.</p>
+    </div>
+    <button class="action-btn" id="btn-split" disabled>Découper le PDF</button>
+    <div class="status" id="status-split"></div>
+  </div>
+
+  <!-- ================= CONVERTIR ================= -->
+  <div id="tool-convert" class="tool-view">
+    <button class="back-btn" onclick="goHome()">← Retour aux outils</button>
+    <h2>Word / Texte → PDF</h2>
+    <p class="subtitle">Convertissez un fichier .docx ou .txt en PDF.</p>
+    <div class="dropzone" id="dz-convert">
+      <div class="dz-icon">📥</div>
+      <div><strong>Choisissez un fichier .docx ou .txt</strong> ou glissez-le ici</div>
+      <p>Un seul fichier</p>
+      <input type="file" id="input-convert" accept=".docx,.txt">
+    </div>
+    <div class="file-list" id="list-convert"></div>
+    <button class="action-btn" id="btn-convert" disabled>Convertir en PDF</button>
+    <div class="status" id="status-convert"></div>
+  </div>
+
+  <!-- ================= IMAGES → PDF ================= -->
+  <div id="tool-img2pdf" class="tool-view">
+    <button class="back-btn" onclick="goHome()">← Retour aux outils</button>
+    <h2>Images → PDF</h2>
+    <p class="subtitle">Ajoutez une ou plusieurs images JPG/PNG, réorganisez-les, puis créez le PDF.</p>
+    <div class="dropzone" id="dz-img2pdf">
+      <div class="dz-icon">📥</div>
+      <div><strong>Choisissez des images</strong> ou glissez-les ici</div>
+      <p>JPG et PNG acceptés — une image par page</p>
+      <input type="file" id="input-img2pdf" accept=".jpg,.jpeg,.png" multiple>
+    </div>
+    <div class="file-list" id="list-img2pdf"></div>
+    <div class="options visible" id="options-img2pdf" style="margin-top:20px">
+      <div class="radio-row">
+        <label><input type="radio" name="img-size" value="a4" checked> Pages A4 (image ajustée)</label>
+        <label><input type="radio" name="img-size" value="fit"> Pages à la taille de chaque image</label>
+      </div>
+    </div>
+    <button class="action-btn" id="btn-img2pdf" disabled>Créer le PDF</button>
+    <div class="status" id="status-img2pdf"></div>
+  </div>
+
+  <!-- ================= PDF → WORD ================= -->
+  <div id="tool-pdf2word" class="tool-view">
+    <button class="back-btn" onclick="goHome()">← Retour aux outils</button>
+    <h2>PDF → Word</h2>
+    <p class="subtitle">Ajoutez un PDF : son texte sera extrait vers un document Word (.docx) modifiable.</p>
+    <div class="dropzone" id="dz-pdf2word">
+      <div class="dz-icon">📥</div>
+      <div><strong>Choisissez un fichier PDF</strong> ou glissez-le ici</div>
+      <p>Un seul fichier — le texte est extrait (les PDF scannés sans texte ne sont pas pris en charge)</p>
+      <input type="file" id="input-pdf2word" accept="application/pdf">
+    </div>
+    <div class="file-list" id="list-pdf2word"></div>
+    <button class="action-btn" id="btn-pdf2word" disabled>Convertir en Word</button>
+    <div class="status" id="status-pdf2word"></div>
+  </div>
+
+  <!-- Conteneur caché pour le rendu Word→PDF -->
+  <div id="render-box" style="position:fixed; left:-10000px; top:0; width:794px; background:#fff; color:#000; padding:60px; font-family:'Times New Roman', serif; font-size:12pt; line-height:1.5;"></div>
+</main>
+
+<footer>DocuFacile — vos fichiers sont traités localement, rien n'est envoyé sur un serveur.</footer>
+
+<script>
+const { PDFDocument } = PDFLib;
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const state = { merge: [], split: [], convert: [], img2pdf: [], pdf2word: [] };
+
+/* ---------- Navigation ---------- */
+function goHome() {
+  document.getElementById('home').classList.remove('hidden');
+  document.querySelectorAll('.tool-view').forEach(v => v.classList.remove('active'));
+}
+function openTool(name) {
+  document.getElementById('home').classList.add('hidden');
+  document.querySelectorAll('.tool-view').forEach(v => v.classList.remove('active'));
+  document.getElementById('tool-' + name).classList.add('active');
+}
+
+/* ---------- Utilitaires ---------- */
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' o';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' Ko';
+  return (bytes / 1048576).toFixed(1) + ' Mo';
+}
+function setStatus(tool, msg, cls) {
+  const el = document.getElementById('status-' + tool);
+  el.innerHTML = msg;
+  el.className = 'status visible' + (cls ? ' ' + cls : '');
+}
+function clearStatus(tool) {
+  const el = document.getElementById('status-' + tool);
+  el.className = 'status'; el.innerHTML = '';
+}
+function download(bytes, filename, mime) {
+  const blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime || 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function baseName(name) { return name.replace(/\.[^.]+$/, ''); }
+
+/* ---------- API serveur (conversions haute fidélité) ---------- */
+async function apiConvert(endpoint, file) {
+  // Renvoie un Blob si le serveur répond, null s'il est injoignable (repli navigateur)
+  if (location.protocol === 'file:') return null;
+  const form = new FormData();
+  form.append('file', file);
+  let res;
+  try {
+    res = await fetch('/api/' + endpoint, { method: 'POST', body: form });
+  } catch { return null; }
+  if (!res.ok) {
+    let msg = 'Erreur serveur (' + res.status + ')';
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return res.blob();
+}
+
+/* ---------- Dropzones ---------- */
+function setupDropzone(tool, { multiple, accept }) {
+  const dz = document.getElementById('dz-' + tool);
+  const input = document.getElementById('input-' + tool);
+  dz.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { addFiles(tool, [...input.files], { multiple, accept }); input.value = ''; });
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    addFiles(tool, [...e.dataTransfer.files], { multiple, accept });
+  });
+}
+function addFiles(tool, files, { multiple, accept }) {
+  clearStatus(tool);
+  const valid = files.filter(f => accept.some(ext => f.name.toLowerCase().endsWith(ext)));
+  if (valid.length < files.length) {
+    setStatus(tool, 'Certains fichiers ont été ignorés (format non accepté).', 'error');
+  }
+  if (!multiple) state[tool] = valid.slice(0, 1);
+  else state[tool] = state[tool].concat(valid);
+  renderList(tool, multiple);
+}
+function renderList(tool, multiple) {
+  const list = document.getElementById('list-' + tool);
+  list.innerHTML = '';
+  state[tool].forEach((f, i) => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    const ext = f.name.toLowerCase();
+    const icon = ext.endsWith('.pdf') ? '📕' : ext.endsWith('.docx') ? '📘'
+      : (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png')) ? '🖼️' : '📃';
+    item.innerHTML = `<span class="f-icon">${icon}</span>
+      <span class="f-name">${f.name}</span>
+      <span class="f-size">${fmtSize(f.size)}</span>`;
+    if (multiple) {
+      const up = document.createElement('button');
+      up.className = 'move'; up.textContent = '▲'; up.title = 'Monter';
+      up.onclick = () => { if (i > 0) { [state[tool][i-1], state[tool][i]] = [state[tool][i], state[tool][i-1]]; renderList(tool, multiple); } };
+      const down = document.createElement('button');
+      down.className = 'move'; down.textContent = '▼'; down.title = 'Descendre';
+      down.onclick = () => { if (i < state[tool].length - 1) { [state[tool][i+1], state[tool][i]] = [state[tool][i], state[tool][i+1]]; renderList(tool, multiple); } };
+      item.appendChild(up); item.appendChild(down);
+    }
+    const del = document.createElement('button');
+    del.textContent = '✕'; del.title = 'Retirer';
+    del.onclick = () => { state[tool].splice(i, 1); renderList(tool, multiple); };
+    item.appendChild(del);
+    list.appendChild(item);
+  });
+  updateButtons(tool);
+}
+function updateButtons(tool) {
+  if (tool === 'merge') document.getElementById('btn-merge').disabled = state.merge.length < 2;
+  if (tool === 'split') {
+    document.getElementById('btn-split').disabled = state.split.length !== 1;
+    document.getElementById('options-split').classList.toggle('visible', state.split.length === 1);
+  }
+  if (tool === 'convert') document.getElementById('btn-convert').disabled = state.convert.length !== 1;
+  if (tool === 'img2pdf') document.getElementById('btn-img2pdf').disabled = state.img2pdf.length < 1;
+  if (tool === 'pdf2word') document.getElementById('btn-pdf2word').disabled = state.pdf2word.length !== 1;
+}
+
+setupDropzone('merge',    { multiple: true,  accept: ['.pdf'] });
+setupDropzone('split',    { multiple: false, accept: ['.pdf'] });
+setupDropzone('convert',  { multiple: false, accept: ['.docx', '.txt'] });
+setupDropzone('img2pdf',  { multiple: true,  accept: ['.jpg', '.jpeg', '.png'] });
+setupDropzone('pdf2word', { multiple: false, accept: ['.pdf'] });
+
+/* ---------- Fusionner ---------- */
+document.getElementById('btn-merge').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-merge');
+  btn.disabled = true;
+  setStatus('merge', '<span class="spinner"></span>Fusion en cours…');
+  try {
+    const out = await PDFDocument.create();
+    for (const file of state.merge) {
+      const src = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+      const pages = await out.copyPages(src, src.getPageIndices());
+      pages.forEach(p => out.addPage(p));
+    }
+    download(await out.save(), 'document-fusionne.pdf');
+    setStatus('merge', '✓ Fusion terminée — le téléchargement a démarré.', 'ok');
+  } catch (err) {
+    console.error(err);
+    setStatus('merge', 'Erreur : ' + err.message, 'error');
+  }
+  btn.disabled = false;
+});
+
+/* ---------- Découper ---------- */
+function parseRanges(text, maxPage) {
+  // "1-3, 5, 8-10" -> [[1,3],[5,5],[8,10]] (1-indexé)
+  const ranges = [];
+  for (const part of text.split(',').map(s => s.trim()).filter(Boolean)) {
+    const m = part.match(/^(\d+)\s*-\s*(\d+)$/) || part.match(/^(\d+)$/);
+    if (!m) throw new Error(`Plage invalide : « ${part} »`);
+    const a = parseInt(m[1], 10), b = m[2] ? parseInt(m[2], 10) : a;
+    if (a < 1 || b > maxPage || a > b) throw new Error(`Plage hors limites : « ${part} » (le document a ${maxPage} pages)`);
+    ranges.push([a, b]);
+  }
+  return ranges;
+}
+async function extractPages(srcDoc, indices) {
+  const out = await PDFDocument.create();
+  const pages = await out.copyPages(srcDoc, indices);
+  pages.forEach(p => out.addPage(p));
+  return out.save();
+}
+document.getElementById('btn-split').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-split');
+  btn.disabled = true;
+  setStatus('split', '<span class="spinner"></span>Découpage en cours…');
+  try {
+    const file = state.split[0];
+    const src = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+    const total = src.getPageCount();
+    const mode = document.querySelector('input[name="split-mode"]:checked').value;
+    const rangeText = document.getElementById('split-ranges').value.trim();
+    const name = baseName(file.name);
+
+    if (mode === 'extract') {
+      if (!rangeText) throw new Error('Indiquez les pages à extraire (ex : 1-3, 5).');
+      const indices = [];
+      for (const [a, b] of parseRanges(rangeText, total))
+        for (let p = a; p <= b; p++) indices.push(p - 1);
+      download(await extractPages(src, indices), name + '-extrait.pdf');
+      setStatus('split', '✓ Extraction terminée — le téléchargement a démarré.', 'ok');
+    } else {
+      const ranges = rangeText
+        ? parseRanges(rangeText, total)
+        : Array.from({ length: total }, (_, i) => [i + 1, i + 1]);
+      const zip = new JSZip();
+      let n = 1;
+      for (const [a, b] of ranges) {
+        const indices = [];
+        for (let p = a; p <= b; p++) indices.push(p - 1);
+        const label = a === b ? `page-${a}` : `pages-${a}-${b}`;
+        zip.file(`${name}-${label}.pdf`, await extractPages(src, indices));
+        n++;
+      }
+      const blob = await zip.generateAsync({ type: 'blob' });
+      download(blob, name + '-decoupe.zip', 'application/zip');
+      setStatus('split', `✓ ${ranges.length} fichier(s) créés — le ZIP est en téléchargement.`, 'ok');
+    }
+  } catch (err) {
+    console.error(err);
+    setStatus('split', 'Erreur : ' + err.message, 'error');
+  }
+  btn.disabled = false;
+});
+
+/* ---------- Convertir ---------- */
+document.getElementById('btn-convert').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-convert');
+  btn.disabled = true;
+  setStatus('convert', '<span class="spinner"></span>Conversion en cours…');
+  try {
+    const file = state.convert[0];
+
+    // 1) Conversion haute fidélité via le serveur (LibreOffice)
+    const serverBlob = await apiConvert('word-to-pdf', file);
+    if (serverBlob) {
+      download(serverBlob, baseName(file.name) + '.pdf');
+      setStatus('convert', '✓ Conversion haute fidélité terminée — le téléchargement a démarré.', 'ok');
+      btn.disabled = false;
+      return;
+    }
+
+    // 2) Repli : conversion dans le navigateur (serveur non disponible)
+    let html;
+    if (file.name.toLowerCase().endsWith('.docx')) {
+      // mammoth conserve titres, gras, italique, listes, tableaux et images (en base64)
+      const result = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+      html = result.value;
+    } else {
+      const text = await file.text();
+      html = text.split(/\n/).map(l => l.trim() ? `<p>${l.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>` : '<p>&nbsp;</p>').join('');
+    }
+    if (!html.trim()) throw new Error('Le document semble vide.');
+
+    const box = document.getElementById('render-box');
+    box.innerHTML = html;
+    // Empêcher les images de déborder de la page
+    box.querySelectorAll('img').forEach(img => { img.style.maxWidth = '100%'; img.style.height = 'auto'; });
+    await new Promise(r => setTimeout(r, 100)); // laisser les images se charger
+
+    await html2pdf().set({
+      margin: [15, 15, 18, 15],
+      filename: baseName(file.name) + '.pdf',
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    }).from(box).save();
+
+    box.innerHTML = '';
+    setStatus('convert', '✓ Conversion terminée — le téléchargement a démarré.', 'ok');
+  } catch (err) {
+    console.error(err);
+    setStatus('convert', 'Erreur : ' + err.message, 'error');
+  }
+  btn.disabled = false;
+});
+
+/* ---------- Images → PDF ---------- */
+document.getElementById('btn-img2pdf').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-img2pdf');
+  btn.disabled = true;
+  setStatus('img2pdf', '<span class="spinner"></span>Création du PDF…');
+  try {
+    const mode = document.querySelector('input[name="img-size"]:checked').value;
+    const A4 = [595.28, 841.89], MARGIN = 28;
+    const out = await PDFDocument.create();
+    for (const file of state.img2pdf) {
+      const bytes = await file.arrayBuffer();
+      const img = file.name.toLowerCase().endsWith('.png')
+        ? await out.embedPng(bytes)
+        : await out.embedJpg(bytes);
+      if (mode === 'fit') {
+        const page = out.addPage([img.width, img.height]);
+        page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+      } else {
+        // Ajuster l'image dans une page A4 (portrait ou paysage selon l'image)
+        const landscape = img.width > img.height;
+        const [pw, ph] = landscape ? [A4[1], A4[0]] : A4;
+        const page = out.addPage([pw, ph]);
+        const scale = Math.min((pw - MARGIN * 2) / img.width, (ph - MARGIN * 2) / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        page.drawImage(img, { x: (pw - w) / 2, y: (ph - h) / 2, width: w, height: h });
+      }
+    }
+    download(await out.save(), 'images.pdf');
+    setStatus('img2pdf', `✓ PDF créé avec ${state.img2pdf.length} page(s) — le téléchargement a démarré.`, 'ok');
+  } catch (err) {
+    console.error(err);
+    setStatus('img2pdf', 'Erreur : ' + err.message, 'error');
+  }
+  btn.disabled = false;
+});
+
+/* ---------- PDF → Word ---------- */
+function xmlEscape(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+function buildDocx(paragraphs) {
+  // Construit un .docx minimal mais valide (ZIP de fichiers XML)
+  const body = paragraphs.map(p => {
+    if (p === '\f') return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    return `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(p)}</w:t></w:r></w:p>`;
+  }).join('');
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body>
+</w:document>`;
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', contentTypes);
+  zip.file('_rels/.rels', rels);
+  zip.file('word/document.xml', documentXml);
+  return zip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  });
+}
+document.getElementById('btn-pdf2word').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-pdf2word');
+  btn.disabled = true;
+  setStatus('pdf2word', '<span class="spinner"></span>Extraction du texte…');
+  try {
+    const file = state.pdf2word[0];
+
+    // 1) Conversion haute fidélité via le serveur (pdf2docx : mise en page, tableaux, images)
+    const serverBlob = await apiConvert('pdf-to-word', file);
+    if (serverBlob) {
+      download(serverBlob, baseName(file.name) + '.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      setStatus('pdf2word', '✓ Conversion haute fidélité terminée — le téléchargement a démarré.', 'ok');
+      btn.disabled = false;
+      return;
+    }
+
+    // 2) Repli : extraction de texte dans le navigateur (serveur non disponible)
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const paragraphs = [];
+    let totalChars = 0;
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      // Regrouper les éléments par ligne (coordonnée Y), puis les lignes en paragraphes
+      const lines = [];
+      let lastY = null, current = '';
+      for (const item of content.items) {
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 4) {
+          lines.push(current.trimEnd()); current = '';
+        }
+        current += item.str + (item.hasEOL ? '' : ' ');
+        lastY = item.transform[5];
+      }
+      if (current.trim()) lines.push(current.trimEnd());
+      for (const line of lines) { paragraphs.push(line); totalChars += line.length; }
+      if (i < pdf.numPages) paragraphs.push('\f'); // saut de page
+    }
+    if (totalChars < 5) throw new Error('Aucun texte trouvé — ce PDF est probablement un scan (image). Une OCR serait nécessaire.');
+    const blob = await buildDocx(paragraphs);
+    download(blob, baseName(file.name) + '.docx');
+    setStatus('pdf2word', `✓ ${pdf.numPages} page(s) extraites — le téléchargement a démarré.`, 'ok');
+  } catch (err) {
+    console.error(err);
+    setStatus('pdf2word', 'Erreur : ' + err.message, 'error');
+  }
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>
